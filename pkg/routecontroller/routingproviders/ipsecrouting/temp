@@ -1,0 +1,159 @@
+package vxlanrouting
+
+on each node:
+
+apt-get update
+apt-get install --yes  ipsec-tools
+
+// To dump
+// setkey -D && setkey -DP
+
+// To reset
+// setkey -F && setkey -FP
+
+
+NODE1=172.20.126.129
+NODE1_SPLIT=`echo $NODE1 | tr "." " "`
+NODE1_V6=`printf "2002:%02x%02x:%02x%02x::1" $NODE1_SPLIT`
+CIDR1=100.96.0.0/24
+FAKE1=100.96.0.1/24
+
+NODE2=172.20.155.160
+NODE2_SPLIT=`echo $NODE2 | tr "." " "`
+NODE2_V6=`printf "2002:%02x%02x:%02x%02x::1" $NODE2_SPLIT`
+CIDR2=100.96.1.0/24
+FAKE2=100.96.1.1/24
+
+
+
+# On Node 1: node ${FAKE1} ${NODE1}
+
+ME=${NODE1}
+REMOTE=${NODE2}
+ENCAP=esp-udp
+ENCAP=esp
+# Would be great to use esp-udp
+
+setkey -F && setkey -FP
+setkey -c <<EOF
+add ${ME} ${REMOTE} ah 24500 -A hmac-md5 "1234567890123456";
+add ${ME} ${REMOTE} ${ENCAP} 24501 -E 3des-cbc "123456789012123456789012";
+add ${REMOTE} ${ME} ah 24502 -A hmac-md5 "1234567890123456";
+add ${REMOTE} ${ME} ${ENCAP} 24503 -E 3des-cbc "123456789012123456789012";
+
+spdadd ${ME} ${REMOTE}[4500] udp -P out prio 100 none;
+spdadd ${ME} ${REMOTE}[4500] udp -P in prio 100 none;
+spdadd ${REMOTE} ${ME}[4500] udp -P in prio 100 none;
+spdadd ${REMOTE} ${ME}[4500] udp -P out prio 100 none;
+
+spdadd ${ME} ${REMOTE} any -P out ipsec esp/transport//require ah/transport//require;
+spdadd ${REMOTE} ${ME} any -P in ipsec esp/transport//require ah/transport//require;
+
+EOF
+setkey -D
+setkey -DP
+
+
+# On node2 ${FAKE2} ${NODE2}
+
+REMOTE=${NODE1}
+ME=${NODE2}
+ENCAP=esp-udp
+ENCAP=esp
+
+setkey -F && setkey -FP
+setkey -c <<EOF
+add ${ME} ${REMOTE} ah 24500 -A hmac-md5 "1234567890123456";
+add ${ME} ${REMOTE} ${ENCAP} 24501 -E 3des-cbc "123456789012123456789012";
+add ${REMOTE} ${ME} ah 24502 -A hmac-md5 "1234567890123456";
+add ${REMOTE} ${ME} ${ENCAP} 24503 -E 3des-cbc "123456789012123456789012";
+
+spdadd ${ME} ${REMOTE}[4500] udp -P out prio 100 none;
+spdadd ${ME} ${REMOTE}[4500] udp -P in prio 100 none;
+spdadd ${REMOTE} ${ME}[4500] udp -P in prio 100 none;
+spdadd ${REMOTE} ${ME}[4500] udp -P out prio 100 none;
+
+spdadd ${ME} ${REMOTE} any -P out ipsec esp/transport//require ah/transport//require;
+spdadd ${REMOTE} ${ME} any -P in ipsec esp/transport//require ah/transport//require;
+
+EOF
+setkey -D
+setkey -DP
+
+
+
+
+
+
+// Tunnel mode (ARP problems)
+
+# On node1 master ${FAKE1} ${NODE1}
+
+setkey -F && setkey -FP
+
+echo "add ${NODE1} ${NODE2} esp 34501 -m tunnel -E 3des-cbc \"123456789012123456789012\";" | setkey -c
+echo "spdadd ${FAKE1} ${FAKE2} any -P out ipsec esp/tunnel/${NODE1}-${NODE2}/require;" | setkey -c
+
+echo "add ${NODE2} ${NODE1} esp 34502 -m tunnel -E 3des-cbc \"123456789012123456789012\";" | setkey -c
+echo "spdadd ${FAKE2} ${FAKE1} any -P in ipsec esp/tunnel/${NODE2}-${NODE1}/require;" | setkey -c
+
+ip route add ${CIDR2} via ${NODE2}
+
+# On node2 node ${FAKE2} ${NODE2}
+
+setkey -F && setkey -FP
+
+echo "add ${NODE1} ${NODE2} esp 34501 -m tunnel -E 3des-cbc \"123456789012123456789012\";" | setkey -c
+echo "spdadd ${FAKE1} ${FAKE2} any -P in ipsec esp/tunnel/${NODE1}-${NODE2}/require;" | setkey -c
+
+echo "add ${NODE2} ${NODE1} esp 34502 -m tunnel -E 3des-cbc \"123456789012123456789012\";" | setkey -c
+echo "spdadd ${FAKE2} ${FAKE1} any -P out ipsec esp/tunnel/${NODE2}-${NODE1}/require;" | setkey -c
+
+ip route add ${CIDR1} via ${NODE1}
+
+
+
+
+
+// Tunnel mode with fake IP
+
+#node1 ${FAKE1} ${NODE1}
+
+setkey -F && setkey -FP
+
+echo "add ${NODE1} ${NODE2} esp 34501 -m tunnel -E 3des-cbc \"123456789012123456789012\";" | setkey -c
+echo "spdadd ${CIDR1} ${CIDR2} any -P out ipsec esp/tunnel/${NODE1}-${NODE2}/require;" | setkey -c
+
+echo "add ${NODE2} ${NODE1} esp 34502 -m tunnel -E 3des-cbc \"123456789012123456789012\";" | setkey -c
+echo "spdadd ${CIDR2} ${CIDR1} any -P in ipsec esp/tunnel/${NODE2}-${NODE1}/require;" | setkey -c
+
+ip route add ${CIDR2} dev eth0
+
+#node2 ${FAKE2} ${NODE2}
+
+setkey -F && setkey -FP
+
+echo "add ${NODE1} ${NODE2} esp 34501 -m tunnel -E 3des-cbc \"123456789012123456789012\";" | setkey -c
+echo "spdadd ${CIDR1} ${CIDR2} any -P in ipsec esp/tunnel/${NODE1}-${NODE2}/require;" | setkey -c
+
+echo "add ${NODE2} ${NODE1} esp 34502 -m tunnel -E 3des-cbc \"123456789012123456789012\";" | setkey -c
+echo "spdadd ${CIDR2} ${CIDR1} any -P out ipsec esp/tunnel/${NODE2}-${NODE1}/require;" | setkey -c
+
+ip route add ${CIDR1} dev eth0
+
+
+
+
+/sbin/ip tunnel add tun6to4 mode sit ttl 3 remote any local $NODE1
+/sbin/ip link set dev tun6to4 up
+/sbin/ip -6 addr add ${NODE1_V6}/16 dev tun6to4
+#/sbin/ip -6 route add default via ::192.88.99.1 dev tun6to4 metric 1
+/sbin/ip -6 route add 2000::/3 via ::192.88.99.1 dev tun6to4 metric 1
+
+
+
+/sbin/ip tunnel add tun6to4 mode sit ttl 3 remote any local $NODE2
+/sbin/ip link set dev tun6to4 up
+/sbin/ip -6 addr add ${NODE2_V6}/16 dev tun6to4
+#/sbin/ip -6 route add default via ::192.88.99.1 dev tun6to4 metric 1
+/sbin/ip -6 route add 2000::/3 via ::192.88.99.1 dev tun6to4 metric 1

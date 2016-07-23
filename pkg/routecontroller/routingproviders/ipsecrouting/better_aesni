@@ -1,0 +1,51 @@
+
+NODE1=172.20.126.129
+NODE2=172.20.155.160
+
+#node 10.244.1.1/24 ${NODE1}
+
+ME=${NODE1}
+REMOTE=${NODE2}
+ENCAP=esp-udp
+ENCRYPT_ALG=aes-ctr
+
+setkey -F && setkey -FP
+setkey -c <<EOF
+add ${ME} ${REMOTE} ah 24500 -A hmac-sha1 "12345678901234567890";
+add ${ME} ${REMOTE} ${ENCAP} 24501 -E ${ENCRYPT_ALG} "12345678901212345678";
+add ${REMOTE} ${ME} ah 24502 -A hmac-sha1 "12345678901234567890";
+add ${REMOTE} ${ME} ${ENCAP}  24503 -E ${ENCRYPT_ALG} "12345678901212345678";
+
+
+spdadd ${ME} ${REMOTE} any -P out ipsec esp/transport//require ah/transport//require;
+spdadd ${REMOTE} ${ME} any -P in ipsec esp/transport//require ah/transport//require;
+
+EOF
+setkey -D
+setkey -DP
+
+
+#node2 10.244.2.1/24 ${NODE2}
+
+REMOTE=${NODE1}
+ME=${NODE2}
+ENCAP=esp-udp
+ENCRYPT_ALG=aes-ctr
+
+setkey -F && setkey -FP
+setkey -c <<EOF
+add ${REMOTE} ${ME} ah 24500 -A hmac-sha1 "12345678901234567890";
+add ${REMOTE} ${ME} ${ENCAP} 24501 -E ${ENCRYPT_ALG} "12345678901212345678";
+add ${ME} ${REMOTE} ah 24502 -A hmac-sha1 "12345678901234567890";
+add ${ME} ${REMOTE} ${ENCAP} 24503 -E ${ENCRYPT_ALG} "12345678901212345678";
+
+
+spdadd ${ME} ${REMOTE} any -P out ipsec esp/transport//require  ah/transport//require;
+spdadd ${REMOTE} ${ME} any -P in ipsec esp/transport//require  ah/transport//require;
+
+EOF
+setkey -D
+setkey -DP
+
+
+

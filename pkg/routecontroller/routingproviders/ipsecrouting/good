@@ -1,0 +1,56 @@
+
+
+node 10.244.1.1/24 ${NODE1}
+
+ME=${NODE1}
+REMOTE=${NODE2}
+ENCAP=esp-udp
+# Would be great to use esp-udp
+
+setkey -F && setkey -FP
+setkey -c <<EOF
+add ${ME} ${REMOTE} ah 24500 -A hmac-md5 "1234567890123456";
+add ${ME} ${REMOTE} ${ENCAP} 24501 -E 3des-cbc "123456789012123456789012";
+add ${REMOTE} ${ME} ah 24502 -A hmac-md5 "1234567890123456";
+add ${REMOTE} ${ME} ${ENCAP}  24503 -E 3des-cbc "123456789012123456789012";
+
+spdadd ${ME} ${REMOTE}[4500] udp -P out prio 100 none;
+spdadd ${ME} ${REMOTE}[4500] udp -P in prio 100 none;
+spdadd ${REMOTE} ${ME}[4500] udp -P in prio 100 none;
+spdadd ${REMOTE} ${ME}[4500] udp -P out prio 100 none;
+
+spdadd ${ME} ${REMOTE} any -P out ipsec esp/transport//require ah/transport//require;
+spdadd ${REMOTE} ${ME} any -P in ipsec esp/transport//require ah/transport//require;
+
+EOF
+setkey -D
+setkey -DP
+
+
+node2 10.244.2.1/24 ${NODE2}
+
+REMOTE=${NODE1}
+ME=${NODE2}
+ENCAP=esp-udp
+
+setkey -F && setkey -FP
+setkey -c <<EOF
+add ${REMOTE} ${ME} ah 24500 -A hmac-md5 "1234567890123456";
+add ${REMOTE} ${ME} ${ENCAP} 24501 -E 3des-cbc "123456789012123456789012";
+add ${ME} ${REMOTE} ah 24502 -A hmac-md5 "1234567890123456";
+add ${ME} ${REMOTE} ${ENCAP} 24503 -E 3des-cbc "123456789012123456789012";
+
+spdadd ${ME} ${REMOTE}[4500] udp -P out prio 100 none;
+spdadd ${ME} ${REMOTE}[4500] udp -P in prio 100 none;
+spdadd ${REMOTE} ${ME}[4500] udp -P in prio 100 none;
+spdadd ${REMOTE} ${ME}[4500] udp -P out prio 100 none;
+
+spdadd ${ME} ${REMOTE} any -P out ipsec esp/transport//require  ah/transport//require;
+spdadd ${REMOTE} ${ME} any -P in ipsec esp/transport//require  ah/transport//require;
+
+EOF
+setkey -D
+setkey -DP
+
+
+

@@ -31,6 +31,7 @@ import (
 
 	"github.com/kopeio/route-controller/pkg/routecontroller/routingproviders"
 	"github.com/kopeio/route-controller/pkg/routecontroller/routingproviders/grerouting"
+	"github.com/kopeio/route-controller/pkg/routecontroller/routingproviders/l2tprouting"
 	"github.com/kopeio/route-controller/pkg/routecontroller/routingproviders/layer2routing"
 	"github.com/kopeio/route-controller/pkg/routecontroller/routingproviders/mockrouting"
 	"io/ioutil"
@@ -141,6 +142,8 @@ func main() {
 		provider, err = mockrouting.NewMockRoutingProvider()
 	case "gre":
 		provider, err = grerouting.NewGreRoutingProvider()
+	case "l2tp":
+		provider, err = l2tprouting.NewL2TPRoutingProvider()
 	default:
 		glog.Fatalf("provider not known: %q", *providerID)
 	}
